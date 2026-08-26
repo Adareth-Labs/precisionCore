@@ -1,0 +1,314 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── ENUMS ────────────────────────────────────────────────────────────────────
+
+enum PortalTier {
+  BASIC       // Tier 1 — certs and public data sheets
+  QUALIFIED   // Tier 2 — PPAP, QMS, RFQ tools
+  STRATEGIC   // Tier 3 — capacity data, roadmap, JV templates
+}
+
+enum RFQStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  CLARIFICATION_REQUIRED
+  APPROVED
+  REJECTED
+  IN_PRODUCTION
+  CANCELLED
+}
+
+enum PPAPStatus {
+  PENDING
+  PARTIAL
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum CARSeverity {
+  MINOR
+  MAJOR
+  CRITICAL
+}
+
+enum CARStatus {
+  OPEN
+  ROOT_CAUSE_IDENTIFIED
+  ACTION_PLAN_SUBMITTED
+  VERIFICATION_PENDING
+  CLOSED
+  ESCALATED
+}
+
+enum AuditAction {
+  CREATE
+  READ
+  UPDATE
+  DELETE
+  TRANSITION
+  DOWNLOAD
+  LOGIN
+  LOGOUT
+  ACCESS_DENIED
+}
+
+// ── MODELS ───────────────────────────────────────────────────────────────────
+
+model Supplier {
+  id          String     @id @default(uuid())
+  vendorId    String     @unique // e.g. BW-49201
+  companyName String
+  tier        PortalTier @default(BASIC)
+  isActive    Boolean    @default(true)
+  contactEmail String
+  oems        String[]   // OEM relationships e.g. ["GM", "Ford"]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  users       SupplierUser[]
+  rfqs        RFQ[]
+  ppaps       PPAPSubmission[]
+  cars        CARReport[]
+  scorecard   SupplierScorecard?
+  auditLogs   AuditLog[]
+
+  @@index([tier])
+  @@index([isActive])
+}
+
+model SupplierUser {
+  id         String   @id @default(uuid())
+  supplierId String
+  supabaseId    String   @unique // Supabase user ID (sub claim)
+  email      String   @unique
+  name       String
+  role       String   @default("member") // member | admin
+  createdAt  DateTime @default(now())
+
+  supplier   Supplier @relation(fields: [supplierId], references: [id])
+
+  @@index([supplierId])
+  @@index([supabaseId])
+}
+
+model RFQ {
+  id          String    @id @default(uuid())
+  trackingId  String    @unique // e.g. RFQ-2024-X99
+  supplierId  String
+  productSlug String?   // Reference to Contentful solution slug
+  partFamily  String
+  sku         String?
+  status      RFQStatus @default(DRAFT)
+
+  // Volume requirements
+  annualVolume  Int?
+  minLotSize    Int?
+  peakWeekly    Int?
+
+  // Timeline
+  sopTargetDate   DateTime?
+  protoTargetDate DateTime?
+
+  // Review
+  reviewNotes     String?
+  reviewedBy      String?   // Supabase user ID
+  reviewedAt      DateTime?
+
+  // Metadata
+  submittedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdBy   String    // Supabase user ID
+
+  supplier    Supplier          @relation(fields: [supplierId], references: [id])
+  documents   RFQDocument[]
+  transitions RFQTransition[]
+  auditLogs   AuditLog[]
+
+  @@index([supplierId])
+  @@index([status])
+  @@index([trackingId])
+}
+
+model RFQDocument {
+  id          String   @id @default(uuid())
+  rfqId       String
+  s3Key       String
+  fileName    String
+  contentType String
+  sizeBytes   Int
+  isRequired  Boolean  @default(false)
+  uploadedBy  String   // Supabase user ID
+  uploadedAt  DateTime @default(now())
+
+  rfq RFQ @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+
+  @@index([rfqId])
+}
+
+model RFQTransition {
+  id         String    @id @default(uuid())
+  rfqId      String
+  fromStatus RFQStatus
+  toStatus   RFQStatus
+  actorId    String    // Supabase user ID
+  actorEmail String
+  reason     String?
+  createdAt  DateTime  @default(now())
+
+  rfq RFQ @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+
+  @@index([rfqId])
+}
+
+model PPAPSubmission {
+  id           String     @id @default(uuid())
+  supplierId   String
+  rfqId        String?
+  platformId   String     // EV-Platform Alpha, Titan, etc.
+  status       PPAPStatus @default(PENDING)
+  requiredBy   DateTime?
+  approvedBy   String?    // Supabase user ID
+  approvedAt   DateTime?
+  rejectedBy   String?
+  rejectedAt   DateTime?
+  rejectReason String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  supplier  Supplier       @relation(fields: [supplierId], references: [id])
+  documents PPAPDocument[]
+  auditLogs AuditLog[]
+
+  @@index([supplierId])
+  @@index([status])
+}
+
+model PPAPDocument {
+  id           String   @id @default(uuid())
+  ppapId       String
+  documentType String   // Control_Plan, FMEA, MSA, etc.
+  s3Key        String
+  fileName     String
+  sizeBytes    Int
+  version      Int      @default(1)
+  isRequired   Boolean  @default(true)
+  uploadedBy   String
+  uploadedAt   DateTime @default(now())
+
+  ppap PPAPSubmission @relation(fields: [ppapId], references: [id], onDelete: Cascade)
+
+  @@index([ppapId])
+}
+
+model CARReport {
+  id          String      @id @default(uuid())
+  carId       String      @unique // e.g. CAR-2024-089
+  supplierId  String
+  rfqId       String?
+  lotNumber   String?
+  severity    CARSeverity
+  status      CARStatus   @default(OPEN)
+
+  // Step 1: Identification
+  deviationDescription String
+  partId               String?
+  batchNumber          String?
+
+  // Step 2: Root cause
+  rootCause       String?
+  rootCauseMethod String? // 5-Why, Fishbone, etc.
+
+  // Step 3: Action plan
+  correctiveAction      String?
+  preventiveAction      String?
+  actionDueDate         DateTime?
+  actionResponsibleId   String?
+
+  // Step 4: Verification
+  verifiedBy  String?
+  verifiedAt  DateTime?
+  closedBy    String?
+  closedAt    DateTime?
+
+  assignedTo  String?   // Supabase user ID (quality inspector)
+  createdBy   String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  supplier    Supplier     @relation(fields: [supplierId], references: [id])
+  documents   CARDocument[]
+  auditLogs   AuditLog[]
+
+  @@index([supplierId])
+  @@index([status])
+  @@index([carId])
+}
+
+model CARDocument {
+  id         String   @id @default(uuid())
+  carId      String
+  s3Key      String
+  fileName   String
+  sizeBytes  Int
+  uploadedBy String
+  uploadedAt DateTime @default(now())
+
+  car CARReport @relation(fields: [carId], references: [id], onDelete: Cascade)
+
+  @@index([carId])
+}
+
+model SupplierScorecard {
+  id            String   @id @default(uuid())
+  supplierId    String   @unique
+  qualityPPM    Float    @default(0)
+  deliveryOTD   Float    @default(0)     // percentage 0-100
+  iatfCertified Boolean  @default(false)
+  iatfExpiresAt DateTime?
+  innovationScore Float  @default(0)     // 0-10
+  globalRating  String   @default("B")  // A+ A B C D
+  riskLevel     String   @default("low")
+  lastUpdated   DateTime @default(now())
+
+  supplier Supplier @relation(fields: [supplierId], references: [id])
+}
+
+model AuditLog {
+  id           String      @id @default(uuid())
+  action       AuditAction
+  actorId      String      // Supabase user ID
+  actorEmail   String
+  actorTier    PortalTier?
+  ipAddress    String?
+  userAgent    String?
+  resourceType String      // RFQ | PPAP | CAR | Document | Supplier
+  resourceId   String?
+  supplierId   String?
+  rfqId        String?
+  ppapId       String?
+  carId        String?
+  beforeState  Json?
+  afterState   Json?
+  metadata     Json?
+  createdAt    DateTime    @default(now())
+
+  supplier Supplier? @relation(fields: [supplierId], references: [id])
+  rfq      RFQ?      @relation(fields: [rfqId], references: [id])
+  ppap     PPAPSubmission? @relation(fields: [ppapId], references: [id])
+  car      CARReport? @relation(fields: [carId], references: [id])
+
+  @@index([actorId])
+  @@index([resourceType, resourceId])
+  @@index([supplierId])
+  @@index([createdAt])
+}

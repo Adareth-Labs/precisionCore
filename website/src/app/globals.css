@@ -1,0 +1,131 @@
+/* ── FONTS ───────────────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500&family=JetBrains+Mono:wght@500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+/* ── CUSTOM PROPERTIES ────────────────────────────────────────────────── */
+@layer base {
+  :root {
+    --nav-height: 64px;
+    --color-surface:   #ffffff;
+    --color-bg:        #f8f9fa;
+    --color-bg-low:    #f3f4f5;
+    --color-bg-mid:    #edeeef;
+    --color-bg-high:   #e7e8e9;
+    --color-text:      #191c1d;
+    --color-text-muted:#444748;
+    --color-border:    #c4c7c8;
+    --color-action:    #1a1c1e;
+    --color-action-on: #ffffff;
+    --color-success:   #15803d;
+    --color-success-bg:#f0fdf4;
+    --color-warning:   #b45309;
+    --color-warning-bg:#fffbeb;
+    --color-danger:    #b91c1c;
+    --color-danger-bg: #fef2f2;
+  }
+
+  .dark {
+    --color-surface:   #1a1c1e;
+    --color-bg:        #0f1011;
+    --color-bg-low:    #1a1c1e;
+    --color-bg-mid:    #2c2e30;
+    --color-bg-high:   #3c3e40;
+    --color-text:      #e1e3e4;
+    --color-text-muted:#9aa0a6;
+    --color-border:    #3c4043;
+    --color-action:    #e1e3e4;
+    --color-action-on: #1a1c1e;
+  }
+
+  /* Focus management — visible rings everywhere */
+  *:focus-visible {
+    @apply outline-2 outline-offset-2 outline-ink-primary;
+  }
+  *:focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-ink-primary font-body text-base antialiased;
+    background-color: var(--color-bg);
+    color: var(--color-text);
+  }
+
+  /* Reduced motion — suppress all animations */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* ── COMPONENT LAYER ─────────────────────────────────────────────────── */
+@layer components {
+  /* Section label — monospace uppercase label above headings */
+  .section-label {
+    @apply font-mono text-xs uppercase tracking-widest text-ink-secondary block mb-2;
+  }
+
+  /* Spec table row */
+  .spec-row {
+    @apply flex justify-between items-center py-2.5 border-b border-stroke text-md last:border-0;
+  }
+  .spec-label { @apply text-ink-secondary; }
+  .spec-value { @apply font-mono text-sm font-medium text-ink-primary; }
+
+  /* Article row */
+  .article-row {
+    @apply flex gap-6 py-6 border-b border-stroke cursor-pointer
+           transition-colors duration-150
+           hover:bg-surface-low last:border-0;
+  }
+
+  /* Card */
+  .card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+  }
+  .card-hover {
+    @apply transition-colors duration-150;
+    border: 1px solid var(--color-border);
+  }
+  .card-hover:hover {
+    border-color: var(--color-text);
+  }
+
+  /* Metrics bar */
+  .metrics-bar {
+    background-color: var(--color-action);
+    color: var(--color-action-on);
+  }
+
+  /* Live status dot — animation guarded by prefers-reduced-motion */
+  .live-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background-color: var(--color-success);
+  flex-shrink: 0;
+}
+  @media (prefers-reduced-motion: no-preference) {
+    .live-dot { @apply animate-dot-pulse; }
+  }
+}
+
+/* ── PRINT ────────────────────────────────────────────────────────────── */
+@media print {
+  nav, footer, .no-print, button { display: none !important; }
+  body { background: white !important; color: #191c1d !important; font-size: 12pt; }
+  .card { border: 1px solid #c4c7c8 !important; page-break-inside: avoid; }
+  @page { margin: 20mm; }
+}

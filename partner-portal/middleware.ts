@@ -1,0 +1,91 @@
+// middleware.ts
+import { createServerClient } from '@supabase/ssr';
+import { NextResponse, type NextRequest } from 'next/server';
+
+/**
+ * Tier requirements per route prefix.
+ * Tier is stored in user.app_metadata.tier (set via Supabase admin SDK
+ * or a custom access-token hook — see README).
+ */
+const TIER_REQUIREMENTS: Record<string, number> = {
+  '/rfq':       2,
+  '/ppap':      2,
+  '/scorecard': 2,
+  '/car':       3,
+  '/capacity':  3,
+};
+
+export async function middleware(request: NextRequest) {
+  let supabaseResponse = NextResponse.next({ request });
+
+  // Build a Supabase client that can read/write the session cookie
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) =>
+            request.cookies.set(name, value),
+          );
+          supabaseResponse = NextResponse.next({ request });
+          cookiesToSet.forEach(({ name, value, options }) =>
+            supabaseResponse.cookies.set(name, value, options),
+          );
+        },
+      },
+    },
+  );
+
+  // IMPORTANT: use getUser(), not getSession() — getUser() validates the JWT
+  // against Supabase's server, getSession() only reads from cookie (less secure).
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { pathname } = request.nextUrl;
+  const isPublicRoute =
+    pathname === '/login' ||
+    pathname.startsWith('/auth/') ||
+    pathname.startsWith('/_next/') ||
+    pathname === '/favicon.ico';
+
+  // Not authenticated → send to login
+  if (!user && !isPublicRoute) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/login';
+    return NextResponse.redirect(url);
+  }
+
+  // Authenticated but hitting login page → redirect to dashboard
+  if (user && pathname === '/login') {
+    const url = request.nextUrl.clone();
+    url.pathname = '/dashboard';
+    return NextResponse.redirect(url);
+  }
+
+  // RBAC: read tier from JWT app_metadata (no extra DB round-trip)
+  if (user) {
+    const tier = (user.app_metadata?.tier as number) ?? 1;
+    for (const [route, minTier] of Object.entries(TIER_REQUIREMENTS)) {
+      if (pathname.startsWith(route) && tier < minTier) {
+        const url = request.nextUrl.clone();
+        url.pathname = '/dashboard';
+        url.searchParams.set('error', 'insufficient_tier');
+        url.searchParams.set('required', String(minTier));
+        return NextResponse.redirect(url);
+      }
+    }
+  }
+
+  return supabaseResponse;
+}
+
+export const config = {
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|api/).*)',
+  ],
+};

@@ -1,0 +1,27 @@
+{
+  "framework": "nextjs",
+  "buildCommand": "npm run build",
+  "devCommand": "npm run dev",
+  "installCommand": "npm install",
+  "regions": ["lhr1", "iad1"],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Robots-Tag", "value": "index, follow" }
+      ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/portal/:path*",
+      "destination": "https://portal.precisioncore.com/:path*"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/revalidate/scheduled",
+      "schedule": "0 */6 * * *"
+    }
+  ]
+}
