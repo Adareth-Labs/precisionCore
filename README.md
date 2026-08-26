@@ -589,7 +589,7 @@ That distinction is intentional.
 
 <div align="center">
 
-<img src="./precisioncore-ascii.svg" alt="PrecisionCore ASCII artwork" width="100%">
+<img src="./precisioncore-ascii.png" alt="PrecisionCore ASCII artwork" width="100%">
 
 ### ADARETH LABS
 
