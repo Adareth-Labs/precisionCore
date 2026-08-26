@@ -4,7 +4,6 @@
 
 > **A fictional Tier 1 automotive supplier, built as though it were real.**
 
-![PrecisionCore](precisioncore-ascii.svg)
 
 PrecisionCore is a speculative enterprise platform created by **Adareth Labs** for a prospective client.
 
