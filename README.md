@@ -588,7 +588,7 @@ That distinction is intentional.
 
 <div align="center">
 
-<img src="./asciihtml" alt="PrecisionCore ASCII artwork" width="100%">
+<img src="./ascii.png" alt="PrecisionCore ASCII artwork" width="100%">
 
 ### ADARETH LABS
 
